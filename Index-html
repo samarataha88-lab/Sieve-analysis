@@ -1,1 +1,108 @@
 
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sieve Analysis - Virtual Lab</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body{font-family:Cairo,Tahoma;background:#f0f4f8;margin:0;padding:15px}
+.container{max-width:1100px;margin:auto;background:white;border-radius:15px;padding:20px;box-shadow:0 5px 20px rgba(0,0,0,.1)}
+h1{text-align:center;color:#1e40af}
+.visual{display:flex;justify-content:center;gap:30px;flex-wrap:wrap;margin:20px 0}
+.sieve-stack{width:220px}
+.sieve{border:3px solid #334155;border-bottom:8px solid #94a3b8;background:linear-gradient(#e2e8f0,#cbd5e1);height:45px;margin-bottom:-8px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;border-radius:5px;position:relative}
+.sieve span{font-weight:bold;font-size:13px}
+.sieve .weight{color:#1e40af}
+.pan{height:35px;background:#f59e0b;border:3px solid #92400e;border-radius:0 0 15px 15px;text-align:center;line-height:35px;font-weight:bold}
+.shaker{width:200px;height:30px;background:#1e293b;margin:auto;border-radius:5px;text-align:center;color:white;line-height:30px;animation:shake 0.3s infinite alternate}
+@keyframes shake{0%{transform:translateX(-3px)}100%{transform:translateX(3px)}}
+table{width:100%;border-collapse:collapse;margin:15px 0}
+th,td{border:1px solid #ddd;padding:8px;text-align:center}
+th{background:#1e40af;color:white}
+input{width:70px;padding:5px;text-align:center;border-radius:6px;border:1px solid #ccc}
+button{background:#1e40af;color:white;border:none;padding:12px 20px;border-radius:8px;cursor:pointer;margin:5px;font-size:14px}
+.result{background:#e0f2fe;padding:15px;border-radius:10px;margin:15px 0}
+canvas{max-width:100%}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🔬 معمل تحليل المناخل الافتراضي<br>Sieve Analysis</h1>
+
+<div class="visual">
+<div class="sieve-stack">
+<div class="shaker">Motor - رجاجة</div>
+<div id="stack"></div>
+</div>
+<div style="flex:1;min-width:300px">
+<p><b>طريقة الاختبار:</b> العينة بتتحط في أكبر منخل فوق، الرجاجة بتشتغل 10 دقايق، كل حبة بتنزل للمنخل اللي على مقاسها</p>
+<button onclick="animateSieve()" style="background:#059669">▶️ شغلي الرجاجة</button>
+<button onclick="calculate()">احسبي وارسمي المنحنى 📈</button>
+<button onclick="loadSample()">عينة جاهزة</button>
+<div class="result" id="result">ادخلي الأوزان واضغطي احسبي</div>
+</div>
+</div>
+
+<table>
+<tr><th>المنخل (mm)</th><th>الوزن المتبقي (g)</th><th>% المتبقي</th><th>% المار</th></tr>
+<tbody id="sieveTable"></tbody>
+</table>
+
+<canvas id="psdChart"></canvas>
+<p style="text-align:center;color:#64748b;margin-top:20px">By Eng. Samar A. Taha - Road Lab Platform | CBR + Sieve Analysis</p>
+</div>
+
+<script>
+const sieves=[19,12.5,9.5,4.75,2.36,1.18,0.6,0.3,0.15,0.075];
+const table=document.getElementById('sieveTable');
+const stack=document.getElementById('stack');
+let chart;
+
+sieves.forEach((s,i)=>{
+ table.innerHTML+=`<tr><td>${s}</td><td><input type="number" id="w${i}" placeholder="0"></td><td id="r${i}">-</td><td id="p${i}">-</td></tr>`;
+ stack.innerHTML+=`<div class="sieve" id="s${i}"><span>${s} mm</span><span class="weight" id="sw${i}">0 g</span></div>`;
+});
+table.innerHTML+=`<tr style="background:#fef3c7"><td>Pan</td><td><input type="number" id="wPan" placeholder="0"></td><td id="rPan">-</td><td>-</td></tr>`;
+stack.innerHTML+=`<div class="pan" id="sPan">Pan - 0 g</div>`;
+
+function calculate(){
+ let weights=sieves.map((_,i)=>parseFloat(document.getElementById(`w${i}`).value)||0);
+ let pan=parseFloat(document.getElementById('wPan').value)||0;
+ let total=weights.reduce((a,b)=>a+b,0)+pan;
+ if(total==0){alert('ادخلي الاوزان');return;}
+ let cum=0, passing=[];
+ weights.forEach((w,i)=>{
+  let percent=(w/total)*100;
+  cum+=percent;
+  let pass=100-cum;
+  passing.push(pass);
+  document.getElementById(`r${i}`).innerText=percent.toFixed(1)+'%';
+  document.getElementById(`p${i}`).innerText=pass.toFixed(1)+'%';
+  document.getElementById(`sw${i}`).innerText=w+' g';
+ });
+ document.getElementById('rPan').innerText=((pan/total)*100).toFixed(1)+'%';
+ document.getElementById('sPan').innerText=`Pan - ${pan} g`;
+ drawChart(sieves,passing);
+ let d60=interp(sieves,passing,60), d30=interp(sieves,passing,30), d10=interp(sieves,passing,10);
+ let cu=d60&&d10?(d60/d10).toFixed(2):'-';
+ let cc=d60&&d10&&d30?((d30*d30)/(d60*d10)).toFixed(2):'-';
+ document.getElementById('result').innerHTML=`<b>D10=${d10?.toFixed(3)||'-'} | D30=${d30?.toFixed(3)||'-'} | D60=${d60?.toFixed(3)||'-'}<br>Cu=${cu} | Cc=${cc}<br>${cu>=4?'تربة متدرجة جيدا':'حاولي عينة تانية'}`;
+}
+
+function drawChart(x,y){
+ const ctx=document.getElementById('psdChart');
+ if(chart) chart.destroy();
+ chart=new Chart(ctx,{type:'line',data:{labels:x,datasets:[{label:'PSD Curve',data:y,borderColor:'#1e40af',borderWidth:3,tension:0.3},{label:'Upper Limit',data:[100,95,85,70,60,50,40,30,20,10],borderColor:'#ef4444',borderDash:[5,5]},{label:'Lower Limit',data:[70,60,50,40,30,20,15,8,5,2],borderColor:'#22c55e',borderDash:[5,5]}]},options:{responsive:true,scales:{x:{type:'logarithmic',title:{display:true,text:'Sieve Size (mm)'},reverse:true},y:{title:{display:true,text:'% Passing'},min:0,max:100}}}});
+}
+function interp(x,y,t){for(let i=0;i<y.length-1;i++){if((y[i]>=t&&y[i+1]<=t)||(y[i]<=t&&y[i+1]>=t)){let lx1=Math.log10(x[i]),lx2=Math.log10(x[i+1]);let f=(t-y[i])/(y[i+1]-y[i]);return Math.pow(10,lx1+f*(lx2-lx1));}}return null;}
+function loadSample(){const s=[0,45,85,140,180,160,130,110,70,40];s.forEach((v,i)=>document.getElementById(`w${i}`).value=v);document.getElementById('wPan').value=40;calculate();}
+function animateSieve(){
+ let els=document.querySelectorAll('.sieve');
+ els.forEach((el,i)=>{setTimeout(()=>{el.style.transform='translateX(5px)';setTimeout(()=>el.style.transform='translateX(-5px)',100);setTimeout(()=>el.style.transform='translateX(0)',200)},i*100)});
+}
+</script>
+</div>
+</body>
+</html>
